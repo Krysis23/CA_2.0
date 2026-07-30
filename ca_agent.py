@@ -1,13 +1,73 @@
 import json
+import os
 import re
 import time
+from typing import Optional
+
 import google.generativeai as genai
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
+
+
+def merge_doc_data(docs: list[dict]) -> dict:
+    """
+    Aggregate multiple doc_data payloads from different uploads
+    into a single unified financial summary.
+    """
+
+    if not docs:
+        return {}
+
+    if len(docs) == 1:
+        return docs[0]
+
+    def safe_float(val) -> float:
+        """
+        Convert rupee amounts like "45,230.00" into float.
+        """
+
+        if val is None:
+            return 0.0
+
+        return float(re.sub(r"[^\d.]", "", str(val)) or 0)
+
+    total_credits = sum(safe_float(d.get("total_credits")) for d in docs)
+    total_debits = sum(safe_float(d.get("total_debits")) for d in docs)
+    total_tds = sum(safe_float(d.get("tds_deducted")) for d in docs)
+    avg_income = total_credits / len(docs)
+
+    periods = [d.get("statement_period", "Unknown") for d in docs]
+    monthly_breakdown = []
+
+    for d in docs:
+        monthly_breakdown.append(
+            {
+                "period": d.get("statement_period", "?"),
+                "credits": safe_float(d.get("total_credits")),
+                "debits": safe_float(d.get("total_debits")),
+                "tds": safe_float(d.get("tds_deducted")),
+            }
+        )
+
+    net_annual = (total_credits - total_debits) * (12 / max(len(docs), 1))
+    est_tax = max(0, net_annual - 250000) * 0.05
+
+    return {
+        "person_entity": docs[0].get("person_entity", ""),
+        "documents_merged": len(docs),
+        "periods_covered": periods,
+        "total_credits": round(total_credits, 2),
+        "total_debits": round(total_debits, 2),
+        "net_cashflow": round(total_credits - total_debits, 2),
+        "total_tds_deducted": round(total_tds, 2),
+        "average_monthly_income": round(avg_income, 2),
+        "estimated_annual_net": round(net_annual, 2),
+        "estimated_basic_tax": round(est_tax, 2),
+        "monthly_breakdown": monthly_breakdown,
+    }
 
 
 def generate_with_backoff(prompt_text, retries=3):

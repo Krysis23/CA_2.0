@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { BankSummaryData } from '@/components/BankStatementCard';
 import { useAuth } from './AuthContext';
+import { buildDocDataPayload } from '@/lib/chatUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -23,6 +24,9 @@ export interface UploadedDocItem {
   filename: string;
   doc_data?: Record<string, unknown>;
   plain_text?: string;
+  totalCredits?: number;
+  totalDebits?: number;
+  estimatedTax?: number;
 }
 
 export interface ChatMessage {
@@ -93,13 +97,36 @@ function parseBankSummary(text: unknown): BankSummaryData {
   };
 }
 
+function parseNumericValue(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(/[^0-9.-]/g, '');
+    if (!normalized || normalized === '-' || normalized === '.' || normalized === '-.') {
+      return 0;
+    }
+    const parsed = Number(normalized.replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+export function extractFinancialMetricsFromDocData(doc: Record<string, unknown> | null | undefined) {
+  const bank = (doc?.bank as Record<string, unknown> | undefined) ?? {};
+  const totalCredits = parseNumericValue(bank.total_credits ?? doc?.total_credits ?? 0);
+  const totalDebits = parseNumericValue(bank.total_debits ?? doc?.total_debits ?? 0);
+  const estimatedTax = parseNumericValue(doc?.estimated_tax_new_regime_fy_2025_26 ?? doc?.estimatedTax ?? 0);
+
+  return {
+    totalCredits,
+    totalDebits,
+    estimatedTax,
+  };
+}
+
 function financialDataFromDoc(doc: Record<string, unknown>): FinancialData | undefined {
-  const bank = doc.bank as Record<string, number> | undefined;
-  if (!bank || typeof bank !== 'object') return undefined;
-  const tc = Number(bank.total_credits) || 0;
-  const td = Number(bank.total_debits) || 0;
-  if (tc <= 0 && td <= 0) return undefined;
-  return { totalCredit: tc, totalDebit: td, estimatedTax: 0 };
+  const { totalCredits, totalDebits, estimatedTax } = extractFinancialMetricsFromDocData(doc);
+  if (totalCredits <= 0 && totalDebits <= 0) return undefined;
+  return { totalCredit: totalCredits, totalDebit: totalDebits, estimatedTax };
 }
 
 function buildHistoryFromMessages(messages: ChatMessage[]): { user: string; assistant: string }[] {
@@ -306,7 +333,20 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           data.plain_text_append != null
             ? [...(convBefore.plainFileTexts ?? []), data.plain_text_append]
             : [...(convBefore.plainFileTexts ?? [])];
-        const nextUploaded = [...(convBefore.uploadedDocs ?? []), data.doc_item];
+
+        const metrics = data.doc_data ? extractFinancialMetricsFromDocData(data.doc_data) : undefined;
+        const nextUploaded = [
+          ...(convBefore.uploadedDocs ?? []),
+          {
+            ...data.doc_item,
+            ...(metrics ? {
+              totalCredits: metrics.totalCredits,
+              totalDebits: metrics.totalDebits,
+              estimatedTax: metrics.estimatedTax,
+            } : {}),
+            doc_data: data.doc_data ?? undefined,
+          },
+        ];
 
         let fin: FinancialData | undefined;
         if (data.doc_data) fin = financialDataFromDoc(data.doc_data);
@@ -345,6 +385,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         const priorMessages = convBefore.messages;
         const history = buildHistoryFromMessages(priorMessages);
 
+        const docDataPayload = buildDocDataPayload(
+          convBefore.uploadedDocs ?? [],
+          convBefore.docData ?? null
+        );
+
         const res = await fetch(`${API_BASE}/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -352,7 +397,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             question: content,
             history,
             plain_file_texts: convBefore.plainFileTexts ?? [],
-            doc_data: convBefore.docData ? [convBefore.docData] : [],
+            doc_data: docDataPayload,
             conversation_summary: convBefore.summary ?? '',
           }),
         });

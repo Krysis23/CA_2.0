@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from search import search_rag
-from ca_agent import process_query
+from ca_agent import process_query, merge_doc_data
 from file_handler import extract_bank_summary_with_gemini
 from dev_config import ENABLE_METRICS
 from metrics import evaluate_retrieval, judge_answer   # both return None when ENABLE_METRICS = False
@@ -46,10 +46,17 @@ MAX_FINAL_QUERY_CHARS      = 5500
 
 
 def _as_float(val: Any) -> float:
-    try:
-        return float(val if val is not None else 0)
-    except (TypeError, ValueError):
-        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        normalized = re.sub(r"[^0-9.\-]", "", val)
+        if normalized in ("", "-", ".", "-."):
+            return 0.0
+        try:
+            return float(normalized)
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 def _nonzero_amount(val: Any) -> bool:
@@ -385,18 +392,27 @@ async def ask(body: AskRequest):
             )
 
         retrieved_context = chunks.to_json(orient="records")
-        doc_payload = _normalize_doc_data(req.doc_data)
+        merged = (
+            merge_doc_data(req.doc_data)
+            if len(req.doc_data) > 1
+            else (
+                req.doc_data[0]
+                if req.doc_data
+                else {}
+            )
+        )
         answer = process_query(
             question=combined_query,
             history=recent,
             memory_summary=summary,
-            doc_data=doc_payload,
+            doc_data=[merged],
             plain_file_texts=req.plain_file_texts,
         )
 
         return {
             "answer": answer,
             "summary": new_summary,
+            "merged_data": merged,
             "retrieval": [],
         }
 

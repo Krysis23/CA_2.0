@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, MessageSquare, Edit2, Check, X, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Trash2, MessageSquare, Edit2, Check, X, PanelLeftClose, PanelLeft, BarChart3 } from 'lucide-react';
 import { useChat } from '@/contexts/ChatContext';
 import Logo from '@/components/Logo';
 
@@ -76,7 +77,7 @@ const ChatSidebar = ({ isOpen, onToggle }: ChatSidebarProps) => {
               </button>
             </div>
 
-            <div className="p-3">
+            <div className="p-3 space-y-2">
               <button
                 onClick={createConversation}
                 className="w-full gradient-primary text-primary-foreground text-sm font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 glow-hover transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -84,6 +85,13 @@ const ChatSidebar = ({ isOpen, onToggle }: ChatSidebarProps) => {
                 <Plus size={16} />
                 New Chat
               </button>
+              <Link
+                to="/dashboard"
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                <BarChart3 size={16} />
+                Dashboard
+              </Link>
             </div>
 
             {activeConversation?.docData && typeof activeConversation.docData === 'object' && (

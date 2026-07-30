@@ -22,7 +22,7 @@ const Login = () => {
     try {
       await login(email, password);
       toast.success('Welcome back!');
-      navigate('/dashboard');
+      navigate('/chat');
     } catch (err: any) {
       setError(err.message);
     }
