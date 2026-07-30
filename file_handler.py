@@ -85,6 +85,15 @@ OUTPUT JSON SCHEMA (all fields required, use 0 for missing):
   "taxable_income_estimate": 0,
   "estimated_tax_new_regime_fy_2025_26": 0,
 
+  "transactions": [
+    {
+      "date": "DD Mon YYYY",
+      "description": "short description",
+      "amount": "0.00",
+      "type": "credit or debit"
+    }
+  ],
+
   "tax_breakdown": {
     "gross_income": 0,
     "standard_deduction": 75000,

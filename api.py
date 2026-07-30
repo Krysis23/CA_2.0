@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from search import search_rag
 from ca_agent import process_query, merge_doc_data
+from anomaly import detect_anomalies, anomaly_summary_text
 from file_handler import extract_bank_summary_with_gemini
 from dev_config import ENABLE_METRICS
 from metrics import evaluate_retrieval, judge_answer   # both return None when ENABLE_METRICS = False
@@ -454,10 +455,22 @@ async def upload(file: UploadFile = File(...)):
 
         doc_data = doc_data_from_bank_gemini(parsed)
 
+        transactions = doc_data.get("transactions", [])
+        flagged = detect_anomalies(transactions)
+        anomaly_text = anomaly_summary_text(flagged)
+
+        existing_summary = doc_data.get("summary_message", "")
+        doc_data["summary_message"] = (
+            existing_summary + anomaly_text
+        )
+        doc_data["flagged_transactions"] = flagged
+
+        doc_item = {"filename": display_name, "summary": doc_data["summary_message"]}
+
         return {
-            "doc_item":         {"filename": display_name, "summary": summary_message},
-            "summary_message":  summary_message,
+            "doc_item":         doc_item,
             "doc_data":         doc_data,
+            "summary_message":  doc_data["summary_message"],
             "plain_text_append": None,
             "warning":          None,
         }
