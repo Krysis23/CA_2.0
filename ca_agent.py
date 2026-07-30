@@ -364,13 +364,47 @@ def _is_bank_statement_doc(doc_data: dict | None) -> bool:
     return str(doc_data.get("document_type", "") or "").strip().lower() == "bank_statement"
 
 
-def process_query(query, retrieved_context, doc_data=None, classification: dict | None = None):
+def process_query(
+    query=None,
+    retrieved_context=None,
+    doc_data=None,
+    classification: dict | None = None,
+    *,
+    question: str | None = None,
+    history: list[dict] | None = None,
+    memory_summary: str | None = None,
+    plain_file_texts: list[str] | None = None,
+):
     """
     query               — user's question (may include document blob)
     retrieved_context   — ICAI chunks from search_rag()
     doc_data            — optional structured upload from Gemini Vision
-    classification   — optional HyDE / keyword routing from search_rag()
+    classification      — optional HyDE / keyword routing from search_rag()
+    question            — alternative entry point for /ask requests
+    history             — recent chat turns to include as context
+    memory_summary      — compressed summary of older turns
+    plain_file_texts    — extracted text from uploaded files
     """
+
+    if query is None:
+        query = question or ""
+    if retrieved_context is None:
+        retrieved_context = ""
+
+    if memory_summary:
+        query = f"{query}\n\nMemory summary:\n{memory_summary}".strip()
+
+    if history:
+        history_text = "\n".join(
+            f"User: {item.get('user', item.get('content', ''))}\nAssistant: {item.get('assistant', item.get('content', ''))}"
+            for item in history
+            if isinstance(item, dict)
+        )
+        if history_text:
+            query = f"{query}\n\nRecent conversation:\n{history_text}".strip()
+
+    if plain_file_texts:
+        query = f"{query}\n\nUploaded text:\n{'\n\n'.join(plain_file_texts)}".strip()
 
     user_query = query.split("\n")[0]
 
@@ -537,3 +571,89 @@ Answer clearly in bullet points.
 """
 
     return generate_with_backoff(prompt)
+
+
+def format_history(history: list[dict]) -> str:
+    if not history:
+        return "No prior conversation yet."
+
+    lines: list[str] = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        user_text = str(item.get("user") or item.get("content") or "").strip()
+        assistant_text = str(item.get("assistant") or "").strip()
+        if user_text or assistant_text:
+            lines.append(f"User: {user_text}\nAssistant: {assistant_text}")
+
+    return "\n\n".join(lines).strip() or "No prior conversation yet."
+
+
+def format_doc_context(doc_data: list[dict], plain_file_texts: list[str]) -> str:
+    if isinstance(doc_data, dict):
+        doc_data = [doc_data]
+
+    parts: list[str] = []
+    for item in doc_data or []:
+        if not isinstance(item, dict):
+            continue
+        person = str(item.get("person_name") or item.get("person_entity") or item.get("name") or "N/A").strip()
+        period = str(item.get("period") or item.get("statement_period") or "N/A").strip()
+        summary = str(item.get("raw_text_summary") or item.get("summary") or item.get("summary_text") or "").strip()
+        section_lines = [f"- Person/Entity: {person}", f"- Period: {period}"]
+        if summary:
+            section_lines.append(f"- Summary: {summary}")
+        parts.append("\n".join(section_lines))
+
+    if plain_file_texts:
+        file_text = "\n\n".join(str(text).strip() for text in plain_file_texts if str(text).strip())
+        if file_text:
+            parts.append(f"Uploaded file text:\n{file_text}")
+
+    return "\n\n".join(parts).strip() or "No document context provided."
+
+
+def process_query(
+    question: str,
+    history: list[dict],
+    memory_summary: str = "",
+    doc_data: list[dict] = [],
+    plain_file_texts: list[str] = [],
+) -> str:
+    memory_block = ""
+
+    if memory_summary:
+        memory_block = f"""
+CONVERSATION MEMORY
+(Key facts from earlier in this session)
+
+{memory_summary}
+
+---
+"""
+
+    system = f"""
+You are an expert CA assistant specialising in Indian taxation.
+
+{memory_block}
+
+Recent conversation:
+
+{format_history(history)}
+
+Document context:
+
+{format_doc_context(doc_data, plain_file_texts)}
+
+Question:
+
+{question}
+
+Answer in clear, structured English.
+Cite relevant sections wherever applicable.
+"""
+
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(system)
+
+    return response.text

@@ -5,8 +5,9 @@ FastAPI backend:
   RAG and for the LLM; recent chat turns are appended separately for memory.
   Metrics (retrieval eval + answer judge) are optional — toggled via dev_config.py.
 """
-
 from __future__ import annotations
+
+from memory import build_context
 
 import os
 import uuid
@@ -147,18 +148,19 @@ def doc_data_from_bank_gemini(parsed: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
-def compact_doc_retrieval_hint(doc_data: Optional[dict[str, Any]]) -> str:
+def compact_doc_retrieval_hint(doc_data: Any) -> str:
     """Compact line appended to the embedding text for RAG (not sent to HyDE prompt)."""
-    if not doc_data:
+    normalized_doc_data = _normalize_doc_data(doc_data)
+    if not normalized_doc_data:
         return ""
     bits: list[str] = []
-    pn = str(doc_data.get("person_name") or "").strip()
+    pn = str(normalized_doc_data.get("person_name") or "").strip()
     if pn and pn != "N/A":
         bits.append(f"Uploaded bank statement context for {pn}")
-    est = _as_float(doc_data.get("estimated_annual_income"))
+    est = _as_float(normalized_doc_data.get("estimated_annual_income"))
     if est > 0:
         bits.append(f"estimated annual income {est:.0f} INR")
-    tb = doc_data.get("tax_breakdown")
+    tb = normalized_doc_data.get("tax_breakdown")
     if isinstance(tb, dict):
         ti = _as_float(tb.get("taxable_income"))
         ft = _as_float(tb.get("final_tax"))
@@ -166,10 +168,10 @@ def compact_doc_retrieval_hint(doc_data: Optional[dict[str, Any]]) -> str:
             bits.append(f"model taxable income {ti:.0f} INR (FY new regime)")
         if ft > 0:
             bits.append(f"model final tax per slabs {ft:.0f} INR")
-    et = _as_float(doc_data.get("estimated_tax_new_regime_fy_2025_26"))
+    et = _as_float(normalized_doc_data.get("estimated_tax_new_regime_fy_2025_26"))
     if et > 0 and not (isinstance(tb, dict) and _as_float(tb.get("final_tax")) > 0):
         bits.append(f"model estimated tax {et:.0f} INR")
-    bank = doc_data.get("bank") or {}
+    bank = normalized_doc_data.get("bank") or {}
     if isinstance(bank, dict):
         cr = _as_float(bank.get("total_credits"))
         if cr > 0:
@@ -184,9 +186,10 @@ class HistoryTurn(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1)
-    history: list[HistoryTurn] = Field(default_factory=list)
+    history: list[dict] = Field(default_factory=list)
+    doc_data: list[dict] = Field(default_factory=list)
     plain_file_texts: list[str] = Field(default_factory=list)
-    doc_data: Optional[dict[str, Any]] = None
+    conversation_summary: str = ""
 
 
 def build_memory(history: list[HistoryTurn]) -> str:
@@ -196,15 +199,26 @@ def build_memory(history: list[HistoryTurn]) -> str:
     ).strip()
 
 
+def _normalize_doc_data(doc_data: Any) -> Optional[dict[str, Any]]:
+    if isinstance(doc_data, dict):
+        return doc_data
+    if isinstance(doc_data, list):
+        for item in doc_data:
+            if isinstance(item, dict):
+                return item
+    return None
+
+
 def build_document_context(
-    doc_data: Optional[dict[str, Any]],
+    doc_data: Any,
     plain_file_texts: list[str],
 ) -> str:
     parts: list[str] = []
-    if doc_data:
+    normalized_doc_data = _normalize_doc_data(doc_data)
+    if normalized_doc_data:
         parts.append(
             "[Uploaded document — structured]\n"
-            + format_structured_doc_summary(doc_data)
+            + format_structured_doc_summary(normalized_doc_data)
         )
     if plain_file_texts:
         blob = "\n\n".join(t.strip() for t in plain_file_texts if t and str(t).strip())
@@ -342,19 +356,23 @@ def bank_gemini_dict_to_plaintext(parsed: dict[str, Any]) -> str:
 
 @app.post("/ask")
 async def ask(body: AskRequest):
-    user_text = body.question.strip()
+    req = body
+    user_text = req.question.strip()
     if not user_text:
         raise HTTPException(status_code=400, detail="Empty question")
 
-    doc_blob       = build_document_context(body.doc_data, body.plain_file_texts)
+    doc_blob = build_document_context(req.doc_data, req.plain_file_texts)
     combined_query = combine_question_and_uploads(user_text, doc_blob)
-    memory_context = build_memory(body.history)
-    final_query    = (combined_query + ("\n\n" + memory_context if memory_context else "")).strip()
-    final_query    = final_query[:MAX_FINAL_QUERY_CHARS]
+    combined_query = combined_query[:MAX_FINAL_QUERY_CHARS]
+
+    memory_ctx = build_context(req.history, keep_recent=6)
+    summary = req.conversation_summary or memory_ctx["summary"]
+    recent = memory_ctx["recent"]
+    new_summary = memory_ctx["summary"] if not req.conversation_summary else summary
 
     try:
         # RAG: question + optional upload hint; HyDE returns classification in all modes.
-        rag_hint = compact_doc_retrieval_hint(body.doc_data)
+        rag_hint = compact_doc_retrieval_hint(req.doc_data)
         chunks, classification = search_rag(user_text, top_k=8, doc_retrieval_hint=rag_hint or None)
 
         level_order = {"final": 0, "intermediate": 1, "foundation": 2}
@@ -367,47 +385,19 @@ async def ask(body: AskRequest):
             )
 
         retrieved_context = chunks.to_json(orient="records")
+        doc_payload = _normalize_doc_data(req.doc_data)
         answer = process_query(
-            final_query,
-            retrieved_context,
-            doc_data=body.doc_data,
-            classification=classification,
+            question=combined_query,
+            history=recent,
+            memory_summary=summary,
+            doc_data=doc_payload,
+            plain_file_texts=req.plain_file_texts,
         )
 
-        # ── Metrics — only runs when ENABLE_METRICS = True ────────
-        metrics = None
-        if ENABLE_METRICS:
-            retrieval = evaluate_retrieval(user_text, chunks, k=4)
-            judge     = judge_answer(user_text, answer)
-
-            if retrieval and judge:
-                metrics = {
-                    "precision_at_4": retrieval["precision_at_k"],
-                    "crag_status":    retrieval["crag_status"],
-                    "crag_score":     retrieval["crag_score"],
-                    "crag_action":    retrieval["crag_action"],
-                    "chunk_scores":   retrieval["chunk_scores"],
-                    "judge_score":    judge["score"],
-                    "judge_reason":   judge["reason"],
-                }
-
-        if metrics:
-            print("\n" + "=" * 60)
-            print("  METRICS REPORT")
-            print("=" * 60)
-            print(f"  Precision@4:   {metrics['precision_at_4']}")
-            print(f"  CRAG Status:   {metrics['crag_status']}")
-            print(f"  CRAG Score:    {metrics['crag_score']}")
-            print(f"  CRAG Action:   {metrics['crag_action']}")
-            print(f"  Chunk Scores:  {metrics['chunk_scores']}")
-            print(f"  Judge Score:   {metrics['judge_score']} / 5")
-            print(f"  Judge Reason:  {metrics['judge_reason']}")
-            print("=" * 60 + "\n")
-
         return {
-            "answer":           answer,
-            "metrics":          metrics,          # null in prod, populated in dev
-            "retrieved_chunks": chunks_to_preview_records(chunks),
+            "answer": answer,
+            "summary": new_summary,
+            "retrieval": [],
         }
 
     except Exception as e:

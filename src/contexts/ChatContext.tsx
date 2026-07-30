@@ -48,6 +48,7 @@ export interface Conversation {
   docData?: Record<string, unknown> | null;
   plainFileTexts?: string[];
   uploadedDocs?: UploadedDocItem[];
+  summary?: string;
 }
 
 interface ChatContextType {
@@ -130,6 +131,7 @@ function normalizeConversation(raw: Record<string, unknown>): Conversation {
     docData: (raw.docData as Record<string, unknown> | null | undefined) ?? null,
     plainFileTexts: (raw.plainFileTexts as string[] | undefined) ?? [],
     uploadedDocs: (raw.uploadedDocs as UploadedDocItem[] | undefined) ?? [],
+    summary: typeof raw.summary === 'string' ? raw.summary : '',
   };
 }
 
@@ -234,6 +236,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         docData: null,
         plainFileTexts: [],
         uploadedDocs: [],
+        summary: '',
       };
       currentConvs = [conv, ...conversations];
       convId = conv.id;
@@ -349,7 +352,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             question: content,
             history,
             plain_file_texts: convBefore.plainFileTexts ?? [],
-            doc_data: convBefore.docData ?? null,
+            doc_data: convBefore.docData ? [convBefore.docData] : [],
+            conversation_summary: convBefore.summary ?? '',
           }),
         });
 
@@ -360,6 +364,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         const data = (await res.json()) as {
           answer: string;
+          summary?: string;
           retrieved_chunks: RetrievedChunkPreview[];
         };
 
@@ -376,6 +381,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           return {
             ...c,
             messages: c.messages.map((m) => (m.id === loadingMsg.id ? assistantMsg : m)),
+            summary: data.summary ?? c.summary ?? '',
             updatedAt: new Date(),
           };
         });
