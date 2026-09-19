@@ -121,7 +121,8 @@ const BankStatementCard = ({ data, filename }: BankStatementCardProps) => {
       </div>
 
       {/* Tax Estimate Section */}
-      {data.estimatedTax && data.estimatedTax !== 'N/A' && data.estimatedTax !== '₹0' && (
+      {(data.estimatedAnnualIncome !== 'N/A' || data.estimatedTax !== 'N/A') &&
+       (data.estimatedAnnualIncome !== '₹0' || data.estimatedTax !== '₹0') && (
         <div className="border-t border-border">
           <div className="px-4 py-2.5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/80">

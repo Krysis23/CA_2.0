@@ -26,26 +26,85 @@ def get_mime_type(path):
     }.get(ext, "image/jpeg")
 
 
+def strip_trailing_commas(text: str) -> str:
+    """Remove trailing commas before closing braces/brackets that make JSON invalid.
+    Handles commas that appear just before } or ] (ignoring whitespace/newlines)."""
+    # Strip trailing commas before } or ]
+    return re.sub(r",\s*([}\]])", r"\1", text)
+
+
 def extract_json_object(text: str) -> str:
-    """Extract JSON object from text that may contain markdown or extra content."""
+    """Extract the first complete JSON object from text, correctly skipping braces
+    that appear inside string values (handles escape sequences too)."""
     start = text.find("{")
     if start == -1:
         raise ValueError("No JSON object found in response")
-    
+
     depth = 0
-    for idx in range(start, len(text)):
-        ch = text[idx]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start:idx + 1]
-    
-    raise ValueError("Unmatched braces in JSON response")
+    in_string = False
+    i = start
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == "\\":       # escape sequence — skip next char
+                i += 2
+                continue
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        i += 1
+
+    # Response was cut off — try to salvage by auto-closing open structures
+    partial = text[start:]
+    return _repair_truncated_json(partial)
 
 
-def extract_bank_summary_with_gemini(path):
+def _repair_truncated_json(text: str) -> str:
+    """Best-effort repair of a truncated JSON string by closing open brackets/braces."""
+    stack = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if in_string:
+            if ch == "\\":
+                i += 2
+                continue
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch in ("{", "["):
+                stack.append(ch)
+            elif ch == "}":
+                if stack and stack[-1] == "{":
+                    stack.pop()
+            elif ch == "]":
+                if stack and stack[-1] == "[":
+                    stack.pop()
+        i += 1
+
+    # If we're mid-string, close it
+    if in_string:
+        text += '"'
+
+    # Close any open containers in reverse order
+    for opener in reversed(stack):
+        text += "}" if opener == "{" else "]"
+
+    return text
+
+
+def extract_bank_summary_with_gemini(path, context=None):
     """
     Use Gemini Vision to analyze bank statement and return structured financial JSON.
     
@@ -62,11 +121,36 @@ def extract_bank_summary_with_gemini(path):
     data = read_as_base64(path)
     mime = get_mime_type(path)
 
-    prompt = """You are a Chartered Accountant and tax expert.
+    if context == "itr":
+        prompt = """You are a Chartered Accountant and tax expert.
+
+Analyze this document CAREFULLY and return ONLY valid JSON.
+
+NO markdown, NO code fences, NO explanations, and NO tables.
+
+ONLY strict valid JSON parsable by json.loads().
+
+OUTPUT JSON SCHEMA (all fields required, use 0 for missing):
+
+{
+  "person_entity": "extracted name or N/A",
+  "statement_period": "date range or N/A",
+
+  "opening_balance": 0,
+  "total_credits": 0,
+  "total_debits": 0,
+  "closing_balance": 0,
+
+  "estimated_annual_income": 0,
+  "summary_text": "one-line summary of key financials"
+}
+"""
+    else:
+        prompt = """You are a Chartered Accountant and tax expert.
 
 Analyze this bank statement image/document CAREFULLY and return ONLY valid JSON.
 
-NO markdown, NO code fences, NO explanations, NO tables, NO transactions list.
+NO markdown, NO code fences, NO explanations, and NO tables.
 
 ONLY strict valid JSON parsable by json.loads().
 
@@ -92,7 +176,7 @@ OUTPUT JSON SCHEMA (all fields required, use 0 for missing):
       "amount": "0.00",
       "type": "credit or debit"
     }
-  ],
+  ], // CRITICAL: Extract a MAXIMUM of 50 transactions (the 50 most recent/important). Do NOT extract more or the response will be truncated.
 
   "tax_breakdown": {
     "gross_income": 0,
@@ -207,14 +291,48 @@ CRITICAL RULES:
     ])
 
     raw_text = response.text.strip()
-    
+
     # Remove markdown code fences if present
     raw_text = re.sub(r"```json\n?|```\n?", "", raw_text, flags=re.IGNORECASE).strip()
-    
-    # Extract JSON object
+
+    # --- Layer 1: try direct parse (clean responses won't need extraction) ---
+    try:
+        parsed = json.loads(raw_text)
+        print("[GEMINI PARSE] Direct json.loads succeeded.")
+        return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # --- Layer 1.5: strip trailing commas and retry ---
+    cleaned = strip_trailing_commas(raw_text)
+    if cleaned != raw_text:
+        try:
+            parsed = json.loads(cleaned)
+            print("[GEMINI PARSE] Succeeded after stripping trailing commas (Layer 1.5).")
+            return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # --- Layer 2: brace-aware extractor + auto-repair for truncated responses ---
+    print("[GEMINI PARSE] Direct parse failed; attempting brace-aware extraction.")
     json_text = extract_json_object(raw_text)
-    
-    # Parse and return
-    parsed = json.loads(json_text)
-    
-    return parsed
+
+    # --- Layer 2.5: strip trailing commas from extracted text ---
+    json_text_clean = strip_trailing_commas(json_text)
+    try:
+        parsed = json.loads(json_text_clean)
+        print("[GEMINI PARSE] Brace-aware extraction + trailing-comma strip succeeded.")
+        return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # --- Layer 3: final attempt on raw extracted text (original, pre-strip) ---
+    try:
+        parsed = json.loads(json_text)
+        print("[GEMINI PARSE] Brace-aware extraction succeeded (raw).")
+        return parsed
+    except json.JSONDecodeError as e:
+        # Log the problematic text for debugging
+        print(f"[GEMINI PARSE] JSON decode error after extraction: {e}")
+        print(f"[GEMINI PARSE] Extracted snippet (first 500 chars): {json_text_clean[:500]}")
+        raise ValueError(f"Could not parse Gemini response as JSON: {e}") from e

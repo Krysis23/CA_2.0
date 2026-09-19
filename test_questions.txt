@@ -1,0 +1,29 @@
+Here are 20 questions covering every part of your system:
+
+🧮 Tax Calculations
+Mr. Anil earns salary of ₹8,50,000. He has no investments. Calculate tax under both old and new regime and suggest which is better.
+Mrs. Priya has salary ₹12,00,000, invested ₹1,50,000 in ELSS, paid ₹25,000 health insurance for self and ₹50,000 for senior citizen parents. Calculate tax under old regime.
+Mr. Rahul has salary ₹22,00,000 and rental income of ₹3,60,000. He pays home loan interest of ₹2,00,000. Calculate tax under old regime with all deductions.
+A person earns ₹55,00,000 salary. Calculate tax under new regime including surcharge.
+Mr. Vikram has business income of ₹18,00,000 and salary of ₹6,00,000. He invested ₹1,50,000 in PPF and paid ₹20,000 health insurance. Calculate total tax liability under old regime.
+🧾 GST
+A manufacturer has output GST of ₹1,25,000 and input tax credit of ₹78,000. What is net GST payable? Also explain ITC eligibility conditions.
+What is the difference between CGST, SGST and IGST? When is each applicable?
+A restaurant has monthly sales of ₹8,00,000. It is registered under composition scheme. Calculate GST payable and explain composition scheme rules.
+What are the conditions under Section 17(5) where input tax credit is blocked? Give examples.
+Explain reverse charge mechanism under GST with examples of services covered.
+📚 Theory — Income Tax
+Explain the concept of residential status under the Income Tax Act and how it affects taxability of income.
+What are the different heads of income under the Income Tax Act? Explain each briefly.
+Explain set off and carry forward of losses under the Income Tax Act with restrictions.
+What deductions are available under Chapter VI-A? List all major sections with limits.
+Explain the provisions related to Tax Deducted at Source for salary income under Section 192.
+📚 Theory — Advanced
+What is the difference between tax avoidance, tax evasion and tax planning? Explain with examples.
+Explain the concept of deemed dividend under Section 2(22) of the Income Tax Act.
+What are the provisions for taxation of digital assets and cryptocurrency in India?
+Explain transfer pricing provisions under Section 92 of the Income Tax Act.
+What is Minimum Alternate Tax (MAT) under Section 115JB? When does it apply and how is it calculated?
+🔥 Hybrid — Best Stress Tests
+
+Hardest: Mr. Suresh has salary ₹28,00,000, LTCG from mutual funds ₹3,50,000, loss from house property ₹2,00,000, invested ₹1,50,000 in 80C and ₹25,000 in 80D. Calculate complete tax liability under old regime showing all computations step by step. Also explain LTCG provisions under Section 112A.

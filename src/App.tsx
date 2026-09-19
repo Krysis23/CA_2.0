@@ -11,6 +11,9 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import PageDashboard from "./pages/Dashboard";
 import Dashboard from "./components/Dashboard";
+import ITRHubPage from "./pages/ITRHubPage";
+import ITRChatPage from "./pages/ITRChatPage";
+import ITRFilingPage from "./pages/ITRFilingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,26 +23,41 @@ const App = () => (
     <TooltipProvider>
       <Sonner />
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <ChatProvider>
+        <ChatProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/itr-hub" element={
+                <ProtectedRoute>
+                  <ITRHubPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/itr-chat" element={
+                <ProtectedRoute>
+                  <ITRChatPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/itr" element={
+                <ProtectedRoute>
+                  <ITRFilingPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
                   <Dashboard />
-                </ChatProvider>
-              </ProtectedRoute>
-            } />
-            <Route path="/chat" element={
-              <ProtectedRoute>
-                <PageDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+                </ProtectedRoute>
+              } />
+              <Route path="/chat" element={
+                <ProtectedRoute>
+                  <PageDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </ChatProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

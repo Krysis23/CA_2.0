@@ -9,6 +9,16 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import Logo from './Logo';
 
+/** Tiny helper: redirects to ITR Hub when no active conversation. */
+function RedirectToHub() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/itr-hub', { replace: true });
+  }, [navigate]);
+  return null;
+}
+
+
 const ChatArea = () => {
   const { activeConversation, clearChat, sendMessage, isProcessing } = useChat();
   const { user, logout } = useAuth();
@@ -88,7 +98,10 @@ const ChatArea = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 lg:p-6">
-        {!activeConversation || activeConversation.messages.length === 0 ? (
+        {!activeConversation ? (
+          // No active conversation → redirect to ITR Hub
+          <RedirectToHub />
+        ) : activeConversation.messages.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

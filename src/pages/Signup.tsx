@@ -42,7 +42,7 @@ const Signup = () => {
     try {
       await signup(name, email, password);
       toast.success('Account created successfully!');
-      navigate('/dashboard');
+      navigate('/chat');
     } catch (err: any) {
       setError(err.message);
     }

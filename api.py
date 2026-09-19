@@ -9,18 +9,21 @@ from __future__ import annotations
 
 from memory import build_context
 
+import asyncio
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from search import search_rag
 from ca_agent import process_query, merge_doc_data
+from itr_agent import analyze_itr_requirements, quick_analyze_documents
 from anomaly import detect_anomalies, anomaly_summary_text
 from file_handler import extract_bank_summary_with_gemini
 from dev_config import ENABLE_METRICS
@@ -153,6 +156,12 @@ def doc_data_from_bank_gemini(parsed: dict[str, Any]) -> dict[str, Any]:
         doc["tax_breakdown"] = tb
     if cc:
         doc["chat_context"] = cc
+    transactions = parsed.get("transactions")
+    if isinstance(transactions, list):
+        doc["transactions"] = [
+            transaction for transaction in transactions
+            if isinstance(transaction, dict)
+        ]
     return doc
 
 
@@ -341,10 +350,32 @@ def format_structured_doc_summary(doc_data: dict[str, Any]) -> str:
 def bank_gemini_dict_to_plaintext(parsed: dict[str, Any]) -> str:
     """Lines matching frontend parseBankSummary() labels (Person/Entity:, Opening balance:, …)."""
     def money(val: Any) -> str:
-        try:
+        if val in (None, "", "N/A", "NA", "null", "None"):
+            return "₹0.00"
+
+        if isinstance(val, (int, float)):
             return f"₹{float(val):,.2f}"
-        except (TypeError, ValueError):
-            return "N/A"
+
+        if isinstance(val, str):
+            cleaned = val.strip()
+            if not cleaned or cleaned.lower() in {"n/a", "na", "null", "none"}:
+                return "₹0.00"
+            cleaned = cleaned.replace("₹", "").replace(",", "").replace(" ", "")
+            if cleaned in {"-", ".", "-."}:
+                return "₹0.00"
+            try:
+                return f"₹{float(cleaned):,.2f}"
+            except ValueError:
+                # Some outputs may include a trailing currency label or formatting noise.
+                match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+                if match:
+                    try:
+                        return f"₹{float(match.group(0)):,.2f}"
+                    except ValueError:
+                        pass
+                return "₹0.00"
+
+        return "₹0.00"
 
     pe = str(parsed.get("person_entity") or "").strip() or "N/A"
     period = str(parsed.get("statement_period") or "").strip() or "N/A"
@@ -414,7 +445,7 @@ async def ask(body: AskRequest):
             "answer": answer,
             "summary": new_summary,
             "merged_data": merged,
-            "retrieval": [],
+            "retrieved_chunks": chunks_to_preview_records(chunks),
         }
 
     except Exception as e:
@@ -422,7 +453,7 @@ async def ask(body: AskRequest):
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), context: Optional[str] = Form(None)):
     ext = Path(file.filename or "").suffix.lower() or ".bin"
     safe_name = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(UPLOAD_FOLDER, safe_name)
@@ -441,7 +472,8 @@ async def upload(file: UploadFile = File(...)):
                 detail="Unsupported file type. Use pdf, png, jpg, jpeg, or webp.",
             )
 
-        parsed = extract_bank_summary_with_gemini(file_path)
+        print(f"[UPLOAD] Received {display_name} with context {context}; starting Gemini extraction", flush=True)
+        parsed = await asyncio.to_thread(extract_bank_summary_with_gemini, file_path, context)
 
         if not parsed or not isinstance(parsed, dict):
             raise HTTPException(
@@ -484,3 +516,33 @@ async def upload(file: UploadFile = File(...)):
             os.remove(file_path)
         except OSError:
             pass
+
+class ITRChatRequest(BaseModel):
+    query: str
+    history: list[dict] = Field(default_factory=list)
+    extracted_data: dict = Field(default_factory=dict)
+    current_stage: str = "collecting"
+
+@app.post("/api/itr/chat")
+async def itr_chat(req: ITRChatRequest):
+    try:
+        response = analyze_itr_requirements(
+            query=req.query,
+            extracted_data=req.extracted_data,
+            history=req.history,
+            current_stage=req.current_stage
+        )
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+class ITRAnalyzeRequest(BaseModel):
+    extracted_data: dict
+
+@app.post("/api/itr/analyze")
+async def itr_analyze(req: ITRAnalyzeRequest):
+    try:
+        response = quick_analyze_documents(req.extracted_data)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e

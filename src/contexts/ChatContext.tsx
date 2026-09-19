@@ -76,24 +76,44 @@ export const useChat = () => {
   return ctx;
 };
 
-/** Extract a field value like "₹1,23,456" or "01 Jan – 31 Mar 2024" from the summary text. */
-function extractField(text: unknown, label: string): string {
-  const s = typeof text === 'string' ? text : text == null ? '' : String(text);
-  const regex = new RegExp(`${label}[:\\s]+(.+)`, 'i');
-  const match = s.match(regex);
-  return match ? match[1].trim() : 'N/A';
+/** Format a raw numeric/string value as an Indian-locale ₹ string. */
+function fmtRupee(val: unknown): string {
+  const n = parseNumericValue(val);
+  if (n === 0 && (val === 0 || val === '0' || val == null)) return '₹0';
+  if (n === 0) return 'N/A';
+  return '₹' + n.toLocaleString('en-IN');
 }
 
-function parseBankSummary(text: unknown): BankSummaryData {
+/** Build BankSummaryData directly from the structured doc_data JSON returned by the API. */
+function bankSummaryFromDocData(doc: Record<string, unknown> | null | undefined): BankSummaryData {
+  // Debug: log the raw doc_data so we can verify field names/values
+  console.log('[bankSummaryFromDocData] raw doc_data:', JSON.stringify(doc, null, 2));
+
+  if (!doc) {
+    return {
+      personEntity: 'N/A', period: 'N/A',
+      openingBalance: 'N/A', totalCredits: 'N/A',
+      totalDebits: 'N/A', closingBalance: 'N/A',
+      estimatedAnnualIncome: 'N/A', estimatedTax: 'N/A',
+    };
+  }
+  // The API stores balances nested under `bank`, and person as `person_name`
+  const bank = (doc.bank as Record<string, unknown> | undefined) ?? {};
+  const tax = parseNumericValue(doc.estimated_tax_new_regime_fy_2025_26 ?? 0);
+  const annualIncome = parseNumericValue(doc.estimated_annual_income ?? 0);
+
+  console.log('[bankSummaryFromDocData] bank:', bank);
+  console.log('[bankSummaryFromDocData] tax:', tax, '| annualIncome:', annualIncome);
+
   return {
-    personEntity:          extractField(text, 'Person/Entity'),
-    period:                extractField(text, 'Period'),
-    openingBalance:        extractField(text, 'Opening balance'),
-    totalCredits:          extractField(text, 'Total credits'),
-    totalDebits:           extractField(text, 'Total debits'),
-    closingBalance:        extractField(text, 'Closing balance'),
-    estimatedAnnualIncome: extractField(text, 'Estimated annual income'),
-    estimatedTax:          extractField(text, 'Estimated tax'),
+    personEntity:          String(doc.person_name ?? doc.person_entity ?? 'N/A') || 'N/A',
+    period:                String(doc.period ?? doc.statement_period ?? 'N/A') || 'N/A',
+    openingBalance:        fmtRupee(bank.opening_balance ?? doc.opening_balance),
+    totalCredits:          fmtRupee(bank.total_credits   ?? doc.total_credits),
+    totalDebits:           fmtRupee(bank.total_debits    ?? doc.total_debits),
+    closingBalance:        fmtRupee(bank.closing_balance ?? doc.closing_balance),
+    estimatedAnnualIncome: annualIncome > 0 ? '₹' + annualIncome.toLocaleString('en-IN') : '₹0',
+    estimatedTax:          tax > 0 ? '₹' + tax.toLocaleString('en-IN') : '₹0',
   };
 }
 
@@ -364,7 +384,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           content: summaryText,
           timestamp: new Date(),
           financialData: fin,
-          bankSummary: parseBankSummary(summaryText),
+          bankSummary: bankSummaryFromDocData(data.doc_data),
         };
 
         const final = withUser.map((c) => {
