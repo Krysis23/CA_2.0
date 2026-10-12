@@ -2,55 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @layer base {
   :root {
-    --background: 222 25% 6%;
-    --foreground: 210 40% 96%;
+    /* Obsidian deep financial surface */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
 
-    --card: 222 20% 10%;
-    --card-foreground: 210 40% 96%;
+    --card: 222 35% 10%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 222 20% 10%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 222 35% 10%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 230 80% 60%;
+    /* Electric emerald & fintech cyan */
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 270 60% 55%;
+    --secondary: 226 70% 55%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 222 15% 16%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 222 25% 15%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 230 80% 60%;
+    --accent: 189 94% 43%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 350 89% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 145 65% 45%;
+    --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
-    --border: 222 15% 18%;
-    --input: 222 15% 14%;
-    --ring: 230 80% 60%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --border: 222 22% 18%;
+    --input: 222 25% 13%;
+    --ring: 160 84% 39%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(230, 80%, 60%), hsl(270, 60%, 55%));
-    --gradient-subtle: linear-gradient(135deg, hsl(222, 20%, 12%), hsl(222, 20%, 8%));
-    --gradient-glow: 0 0 20px hsl(230 80% 60% / 0.3), 0 0 60px hsl(270 60% 55% / 0.15);
+    --radius: 0.85rem;
 
-    --sidebar-background: 222 20% 8%;
-    --sidebar-foreground: 210 30% 80%;
-    --sidebar-primary: 230 80% 60%;
+    --gradient-primary: linear-gradient(135deg, hsl(160, 84%, 39%), hsl(189, 94%, 43%));
+    --gradient-finpilot: linear-gradient(135deg, #10B981 0%, #06B6D4 50%, #6366F1 100%);
+    --gradient-subtle: linear-gradient(135deg, hsl(222, 30% , 11%), hsl(222, 35%, 8%));
+    --gradient-glow: 0 0 25px hsl(160 84% 39% / 0.25), 0 0 60px hsl(189 94% 43% / 0.15);
+
+    --sidebar-background: 222 40% 7%;
+    --sidebar-foreground: 210 30% 85%;
+    --sidebar-primary: 160 84% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 15% 14%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 222 15% 15%;
-    --sidebar-ring: 230 80% 60%;
+    --sidebar-accent: 222 25% 13%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 22% 15%;
+    --sidebar-ring: 160 84% 39%;
   }
 }
 
@@ -60,18 +64,43 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased selection:bg-emerald-500/20 selection:text-emerald-300;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.02em;
   }
 }
 
 @layer utilities {
+  .font-display {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .font-mono-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-feature-settings: 'tnum' on, 'zero' on;
+  }
+
   .gradient-primary {
     background: var(--gradient-primary);
   }
 
+  .gradient-finpilot {
+    background: var(--gradient-finpilot);
+  }
+
   .gradient-text {
-    background: var(--gradient-primary);
+    background: var(--gradient-finpilot);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-emerald {
+    background: linear-gradient(135deg, #34D399, #06B6D4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -86,18 +115,33 @@
   }
 
   .glass {
-    background: hsl(222 20% 10% / 0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid hsl(222 15% 18% / 0.5);
+    background: rgba(14, 21, 36, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%), rgba(14, 21, 36, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+
+  .fin-grid-pattern {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: hsl(222 15% 20%) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 5px;
+    height: 5px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -105,7 +149,11 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: hsl(222 15% 22%);
-    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
   }
 }

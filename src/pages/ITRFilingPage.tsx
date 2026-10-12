@@ -2,10 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
-import { ArrowLeft, UploadCloud, Loader2, FileText, CheckCircle2, Download } from 'lucide-react';
+import { ArrowLeft, UploadCloud, Loader2, FileText, CheckCircle2, Download, ShieldCheck, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import Logo from '@/components/Logo';
 
 interface AnalyzeResult {
   analysis_summary: string;
@@ -51,12 +52,12 @@ export default function ITRFilingPage() {
       });
 
       if (!analyzeRes.ok) {
-         throw new Error('Failed to analyze ITR requirements');
+        throw new Error('Failed to analyze ITR requirements');
       }
 
       const analyzeData: AnalyzeResult = await analyzeRes.json();
       setResult(analyzeData);
-      toast.success("Analysis complete!");
+      toast.success("Analysis complete! Recommended form classified.");
 
     } catch (error: any) {
       toast.error(error.message || "An error occurred");
@@ -80,7 +81,7 @@ export default function ITRFilingPage() {
     const doc = new jsPDF();
     
     doc.setFontSize(20);
-    doc.text("Income Tax Return (ITR) Checklist", 14, 22);
+    doc.text("FINPILOT - Income Tax Return Checklist", 14, 22);
     
     doc.setFontSize(12);
     doc.text(`Recommended Form: ${result.itr_form}`, 14, 32);
@@ -104,7 +105,7 @@ export default function ITRFilingPage() {
       head: [['Document Name']],
       body: checklistData,
       theme: 'grid',
-      headStyles: { fillColor: [20, 184, 166] },
+      headStyles: { fillColor: [16, 185, 129] },
     });
     
     currentY = (doc as any).lastAutoTable.finalY + 10;
@@ -123,110 +124,150 @@ export default function ITRFilingPage() {
        });
     }
 
-    doc.save(`ITR_Checklist_${result.itr_form || 'Unknown'}.pdf`);
+    doc.save(`FINPILOT_Checklist_${result.itr_form || 'Tax'}.pdf`);
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 md:p-12 overflow-y-auto scrollbar-thin">
+    <div className="min-h-screen bg-[#070B13] text-white p-6 md:p-10 overflow-y-auto scrollbar-thin fin-grid-pattern">
       <div className="max-w-4xl mx-auto space-y-8">
-        <Link to="/itr-hub" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={16} /> Back to Hub
-        </Link>
+        
+        {/* Navigation & Header */}
+        <div className="flex flex-col gap-3 pb-4 border-b border-white/[0.08]">
+          <Link
+            to="/itr-hub"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors w-fit p-1.5 rounded-lg hover:bg-white/5"
+          >
+            <ArrowLeft size={15} /> Back to ITR Hub
+          </Link>
 
-        <div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Quick ITR Analyse</h1>
-          <p className="text-muted-foreground mt-2">
-            Upload your Form 16, AIS, or Bank Statement to instantly determine your ITR form and required documents.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Logo size="sm" />
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                  INSTANT ANALYSER
+                </span>
+              </div>
+              <h1 className="text-2xl font-black text-white font-display">
+                Quick 30-Second ITR Document Analyse
+              </h1>
+              <p className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">
+                MULTI-DOCUMENT FINANCIAL REASONING AND GUIDED TAX FILING
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs text-slate-300 font-mono">
+              <ShieldCheck size={14} className="text-emerald-400" />
+              <span>Statutory Rule Engine Active</span>
+            </div>
+          </div>
         </div>
 
-        {/* Upload Area */}
+        {/* Dropzone Upload Area */}
         <div 
           {...getRootProps()} 
-          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer
-            ${isDragActive ? 'border-teal-500 bg-teal-500/5' : 'border-border hover:border-teal-500/50 hover:bg-card'}
-            ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`border-2 border-dashed rounded-3xl p-10 sm:p-14 text-center transition-all cursor-pointer relative overflow-hidden glass-card ${
+            isDragActive
+              ? 'border-emerald-400 bg-emerald-500/10'
+              : 'border-white/15 hover:border-emerald-500/50 hover:bg-[#0E1524]'
+          } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <input {...getInputProps()} />
           
-          <div className="w-16 h-16 rounded-2xl bg-teal-500/10 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4 text-emerald-400 shadow-xl shadow-emerald-500/10">
             {isUploading ? (
-              <Loader2 size={32} className="text-teal-500 animate-spin" />
+              <Loader2 size={30} className="animate-spin text-emerald-400" />
             ) : (
-              <UploadCloud size={32} className="text-teal-500" />
+              <UploadCloud size={30} className="text-emerald-400" />
             )}
           </div>
           
-          <h3 className="text-lg font-medium text-foreground mb-1">
-            {isUploading ? 'Analyzing Document...' : 'Drop your document here'}
+          <h3 className="text-base font-bold text-white mb-1 font-display">
+            {isUploading ? 'Auditing & Mapping Taxpayer Document...' : 'Drop your financial statement here'}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {isUploading ? 'Extracting financial data and mapping to ITR rules' : 'PDF or Images up to 10MB'}
+          <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+            {isUploading
+              ? 'Extracting structured financial metrics via Gemini 1.5 and mapping to Income Tax Rules'
+              : 'Accepts PDF, Form 16, AIS, or Bank Statement images up to 10MB'}
           </p>
+          <div className="mt-4 inline-flex items-center gap-2 text-[10px] font-mono px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-slate-400">
+            <span>Click or drag file to start</span>
+          </div>
         </div>
 
         {/* Results Area */}
         {result && (
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            className="grid grid-cols-1 md:grid-cols-3 gap-5"
           >
-            {/* Form Recommendation */}
-            <div className="md:col-span-1 bg-card border border-border rounded-2xl p-6">
-              <p className="text-sm font-semibold text-muted-foreground uppercase mb-4">Recommended Form</p>
-              <div className="text-4xl font-bold text-teal-400 mb-2">{result.itr_form}</div>
-              <p className="text-sm text-foreground/80 leading-relaxed">
+            {/* Form Recommendation Box */}
+            <div className="md:col-span-1 glass-card rounded-2xl p-6 border border-emerald-500/30 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 to-cyan-500" />
+              <p className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider mb-2">
+                Recommended ITR Form
+              </p>
+              <div className="text-4xl font-black text-white font-display my-2 bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                {result.itr_form}
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed mt-3 border-t border-white/[0.08] pt-3">
                 {result.analysis_summary}
               </p>
             </div>
 
             {/* Checklist & Missing Info */}
-            <div className="md:col-span-2 bg-card border border-border rounded-2xl p-6 space-y-6">
-              
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <FileText size={20} className="text-teal-500" />
-                  Required Documents
-                </h3>
+            <div className="md:col-span-2 glass-card rounded-2xl p-6 border border-white/[0.08] shadow-2xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2">
+                  <FileText size={18} className="text-emerald-400" />
+                  <h3 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                    Required Return Disclosures
+                  </h3>
+                </div>
                 <button 
                   onClick={exportPDF}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted hover:bg-teal-500/10 text-teal-500 text-sm font-medium rounded-lg transition-colors border border-border hover:border-teal-500/30"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold rounded-xl transition-all border border-emerald-500/30 shadow-sm"
                 >
-                  <Download size={16} />
-                  Download PDF
+                  <Download size={14} />
+                  Download PDF Checklist
                 </button>
               </div>
               
               <div>
                 {result.checklist.length > 0 ? (
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {result.checklist.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-foreground bg-muted/40 p-3 rounded-xl border border-border">
-                        <CheckCircle2 size={16} className="text-success shrink-0 mt-0.5" />
+                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-200 bg-[#0E1524] p-3 rounded-xl border border-white/[0.06]">
+                        <CheckCircle2 size={15} className="text-emerald-400 shrink-0 mt-0.5" />
                         <span>{item}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No specific documents identified.</p>
+                  <p className="text-xs text-slate-400">No specific documents identified.</p>
                 )}
               </div>
 
               {result.missing_info.length > 0 && (
-                <div className="pt-4 border-t border-border">
-                  <h3 className="text-sm font-semibold text-amber-500 mb-3">Additional Details Needed</h3>
-                  <ul className="list-disc pl-4 space-y-1">
+                <div className="pt-4 border-t border-white/[0.08] space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                    <AlertCircle size={14} />
+                    <span>Additional Details Needed for Accurate Filing</span>
+                  </div>
+                  <ul className="list-disc pl-4 space-y-1 text-xs text-slate-300">
                     {result.missing_info.map((info, idx) => (
-                      <li key={idx} className="text-sm text-amber-500/80">{info}</li>
+                      <li key={idx} className="text-slate-300">{info}</li>
                     ))}
                   </ul>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    For a more accurate assessment, you can use the <Link to="/itr-chat" className="text-teal-400 hover:underline">Guided Filing Chatbot</Link>.
+                  <p className="text-[11px] text-slate-400 pt-1">
+                    For full multi-step guidance, switch to the{' '}
+                    <Link to="/itr-chat" className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-2">
+                      Guided ITR Copilot
+                    </Link>.
                   </p>
                 </div>
               )}
-
             </div>
           </motion.div>
         )}

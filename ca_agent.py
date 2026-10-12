@@ -464,7 +464,8 @@ def process_query(
             query = f"{query}\n\nRecent conversation:\n{history_text}".strip()
 
     if plain_file_texts:
-        query = f"{query}\n\nUploaded text:\n{'\n\n'.join(plain_file_texts)}".strip()
+        uploaded_context = "\n\n".join(plain_file_texts)
+        query = f"{query}\n\nUploaded text:\n{uploaded_context}".strip()
 
     user_query = query.split("\n")[0]
 

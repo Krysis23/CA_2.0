@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Send, ArrowLeft, Loader2, Paperclip, X, FileText, Image, Download } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Paperclip, X, FileText, Image, Download, ShieldCheck, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Logo from '@/components/Logo';
 
 interface Message {
   id: string;
@@ -29,7 +30,7 @@ export default function ITRChatPage() {
     {
       id: 'welcome',
       sender: 'bot',
-      content: 'Hello! I am your AI Chartered Accountant. To help you determine your ITR form and generate a document checklist, could you tell me a bit about your income sources (e.g., salary, business, capital gains, etc.)?'
+      content: 'Hello! I am your FinPilot AI Tax Assistant. To determine your correct ITR form (ITR-1 through ITR-4) and generate your filing checklist, could you describe your income sources (e.g. salary, house property, business turnover, or capital gains)?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -58,26 +59,55 @@ export default function ITRChatPage() {
         const session = sessions.find((s: any) => s.id === sid);
         if (session) {
           if (session.messages) setMessages(session.messages);
-          if (session.chatState) setChatState(session.chatState);
           if (session.accumulatedData) setAccumulatedData(session.accumulatedData);
-          setSessionId(sid);
+          if (session.chatState) setChatState(session.chatState);
         }
-      } catch (e) {
-        console.error("Failed to load session", e);
+      } catch (err) {
+        console.error("Error restoring session:", err);
       }
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const saveCurrentSession = useCallback((
+    updatedMessages: Message[], 
+    updatedData: Record<string, any>, 
+    updatedState: ChatState
+  ) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem("ca_agent_itr_sessions") ?? "[]");
+      const filtered = existing.filter((s: any) => s.id !== sessionId);
+      
+      const newSession = {
+        id: sessionId,
+        date: new Date().toISOString(),
+        itrForm: updatedState.itr_form,
+        fields: Object.keys(updatedData).length,
+        stage: updatedState.stage,
+        messages: updatedMessages,
+        accumulatedData: updatedData,
+        chatState: updatedState
+      };
+      
+      localStorage.setItem("ca_agent_itr_sessions", JSON.stringify([newSession, ...filtered]));
+    } catch (err) {
+      console.error("Failed to save session", err);
+    }
+  }, [sessionId]);
+
   const handleNewSession = () => {
+    const newId = `itr_${Date.now()}`;
+    setSessionId(newId);
     setMessages([
       {
         id: 'welcome',
         sender: 'bot',
-        content: 'Hello! I am your AI Chartered Accountant. To help you determine your ITR form and generate a document checklist, could you tell me a bit about your income sources (e.g., salary, business, capital gains, etc.)?'
+        content: 'Hello! I am your FinPilot AI Tax Assistant. To determine your correct ITR form (ITR-1 through ITR-4) and generate your filing checklist, could you describe your income sources (e.g. salary, house property, business turnover, or capital gains)?'
       }
     ]);
-    setInput('');
-    setFile(null);
     setAccumulatedData({});
     setChatState({
       bot_reply: '',
@@ -86,44 +116,13 @@ export default function ITRChatPage() {
       missing_info: [],
       stage: 'collecting'
     });
-    const newId = `itr_${Date.now()}`;
-    setSessionId(newId);
-    navigate('/itr-chat', { replace: true });
+    navigate('/itr-chat');
   };
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
-
-  // Save session snapshot to localStorage for ITR Hub recent sessions
-  const saveSession = (state: ChatState, currentMessages: Message[], currentData: any) => {
-    try {
-      const sessions = JSON.parse(localStorage.getItem("ca_agent_itr_sessions") ?? "[]");
-      const snapshot = {
-        id: sessionId,
-        date: new Date().toISOString(),
-        itrForm: state.itr_form,
-        fields: state.checklist.length,
-        stage: state.stage,
-        messages: currentMessages,
-        chatState: state,
-        accumulatedData: currentData
-      };
-      
-      const existing = sessions.findIndex((s: any) => s.id === sessionId);
-      if (existing >= 0) {
-        sessions[existing] = { ...sessions[existing], ...snapshot };
-      } else {
-        sessions.unshift(snapshot);
-      }
-      localStorage.setItem("ca_agent_itr_sessions", JSON.stringify(sessions.slice(0, 10)));
-    } catch {
-      // localStorage write failure — non-critical
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles[0]) {
+      setFile(acceptedFiles[0]);
     }
-  };
-
-  const onDrop = useCallback((accepted: File[]) => {
-    if (accepted[0]) setFile(accepted[0]);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
@@ -131,185 +130,221 @@ export default function ITRChatPage() {
     noClick: true,
     accept: {
       'application/pdf': ['.pdf'],
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp'],
+      'image/*': ['.png', '.jpg', '.jpeg']
     },
-    maxFiles: 1,
-    maxSize: 10 * 1024 * 1024,
+    maxFiles: 1
   });
-
-  const exportPDF = () => {
-    if (chatState.checklist.length === 0) return;
-    const doc = new jsPDF();
-    
-    doc.setFontSize(20);
-    doc.text("Income Tax Return (ITR) Checklist", 14, 22);
-    
-    doc.setFontSize(12);
-    doc.text(`Recommended Form: ${chatState.itr_form || "Unknown"}`, 14, 32);
-    
-    let currentY = 42;
-    
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text("Required Documents:", 14, currentY);
-    currentY += 5;
-    
-    const checklistData = chatState.checklist.map(item => [item]);
-    
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Document Name']],
-      body: checklistData,
-      theme: 'grid',
-      headStyles: { fillColor: [20, 184, 166] },
-    });
-    
-    currentY = (doc as any).lastAutoTable.finalY + 10;
-    
-    if (chatState.missing_info.length > 0) {
-       doc.setFontSize(14);
-       doc.text("Additional Details Needed:", 14, currentY);
-       currentY += 5;
-       const missingData = chatState.missing_info.map(item => [item]);
-       autoTable(doc, {
-         startY: currentY,
-         head: [['Detail / Question']],
-         body: missingData,
-         theme: 'grid',
-         headStyles: { fillColor: [245, 158, 11] },
-       });
-    }
-
-    doc.save(`ITR_Checklist_${chatState.itr_form || 'Unknown'}.pdf`);
-  };
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if ((!input.trim() && !file) || isLoading) return;
 
-    let userMessage = input.trim();
-    if (file && !userMessage) userMessage = `I have uploaded a document: ${file.name}`;
-
+    const userText = input.trim();
+    const attachedFile = file;
     setInput('');
-    const currentFile = file;
     setFile(null);
-    
-    const newUserMsg: Message = { id: Date.now().toString(), sender: 'user', content: userMessage };
-    setMessages(prev => [...prev, newUserMsg]);
+
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      sender: 'user',
+      content: userText || (attachedFile ? `Uploaded document: ${attachedFile.name}` : '')
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      let newExtractedData = { ...accumulatedData };
+      let currentDocData = accumulatedData;
 
-      if (currentFile) {
+      if (attachedFile) {
+        toast.info("Extracting financial data from document...");
         const formData = new FormData();
-        formData.append('file', currentFile);
+        formData.append('file', attachedFile);
         formData.append('context', 'itr');
+
         const uploadRes = await fetch('http://localhost:8000/upload', {
           method: 'POST',
           body: formData,
         });
-        if (!uploadRes.ok) throw new Error('File upload failed');
-        const uploadData = await uploadRes.json();
-        if (uploadData.doc_data) {
-           newExtractedData = { ...newExtractedData, ...uploadData.doc_data };
-           setAccumulatedData(newExtractedData);
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          currentDocData = { ...currentDocData, ...(uploadData.doc_data || {}) };
+          setAccumulatedData(currentDocData);
+          toast.success("Document extracted successfully!");
+        } else {
+          toast.error("Failed to extract document, proceeding with message only.");
         }
       }
-      // Build history payload
-      const historyPayload = [];
-      let currentUser = "";
-      for (const msg of messages) {
-        if (msg.sender === 'user') {
-          currentUser = msg.content;
-        } else if (msg.sender === 'bot') {
-          if (currentUser) {
-            historyPayload.push({ user: currentUser, assistant: msg.content });
-            currentUser = "";
-          } else {
-            historyPayload.push({ user: "", assistant: msg.content });
-          }
-        }
-      }
-      if (currentUser) {
-         historyPayload.push({ user: currentUser, assistant: "" });
-      }
+
+      const historyPayload = newMessages
+        .filter(m => m.id !== 'welcome')
+        .slice(-6)
+        .map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.content
+        }));
 
       const res = await fetch('http://localhost:8000/api/itr/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: userMessage,
+          message: userText,
           history: historyPayload,
-          extracted_data: newExtractedData,
-          current_stage: chatState.stage
+          context: chatState.stage,
+          doc_data: currentDocData
         })
       });
 
-      if (!res.ok) throw new Error('Failed to get response');
-      const data: ChatState = await res.json();
-      
-      const botMsg: Message = { 
-        id: (Date.now() + 1).toString(), 
-        sender: 'bot', 
-        content: data.bot_reply || 'Okay.',
-        options: (data as any).mcq_options || []
-      };
-      
-      setChatState(data);
-      setMessages(prev => {
-        const newMessages = [...prev, botMsg];
-        saveSession(data, newMessages, newExtractedData);
-        return newMessages;
-      });
+      if (!res.ok) {
+        throw new Error("Failed to communicate with ITR assistant");
+      }
 
-    } catch (err) {
-      toast.error("Failed to connect to assistant.");
+      const data = await res.json();
+      
+      const botMessage: Message = {
+        id: `bot_${Date.now()}`,
+        sender: 'bot',
+        content: data.reply || "I've processed your details.",
+        options: data.options || []
+      };
+
+      const updatedMessagesWithBot = [...newMessages, botMessage];
+      setMessages(updatedMessagesWithBot);
+
+      const updatedChatState: ChatState = {
+        bot_reply: data.reply,
+        itr_form: data.itr_form || chatState.itr_form,
+        checklist: data.checklist || chatState.checklist,
+        missing_info: data.missing_info || chatState.missing_info,
+        stage: data.stage || chatState.stage
+      };
+      setChatState(updatedChatState);
+
+      saveCurrentSession(updatedMessagesWithBot, currentDocData, updatedChatState);
+
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred");
+      setMessages(prev => [
+        ...prev, 
+        { 
+          id: `err_${Date.now()}`, 
+          sender: 'bot', 
+          content: "Sorry, I encountered an issue processing your request. Please try again." 
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const exportPDF = () => {
+    if (!chatState.checklist || chatState.checklist.length === 0) {
+      toast.error("No checklist items available to download.");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      
+      doc.setFontSize(20);
+      doc.text("FINPILOT - Income Tax Return Checklist", 14, 22);
+      
+      doc.setFontSize(12);
+      doc.text(`Recommended Form: ${chatState.itr_form || "Pending Determination"}`, 14, 32);
+      
+      let currentY = 40;
+      doc.setFontSize(14);
+      doc.text("Required Documents:", 14, currentY);
+      currentY += 5;
+      
+      const checklistData = chatState.checklist.map(item => [item]);
+      
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Document Name']],
+        body: checklistData,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] },
+      });
+      
+      currentY = (doc as any).lastAutoTable.finalY + 10;
+      
+      if (chatState.missing_info && chatState.missing_info.length > 0) {
+        doc.setFontSize(14);
+        doc.text("Missing Details to Confirm:", 14, currentY);
+        currentY += 5;
+        const missingData = chatState.missing_info.map(item => [item]);
+        autoTable(doc, {
+          startY: currentY,
+          head: [['Missing Info / Verification']],
+          body: missingData,
+          theme: 'grid',
+          headStyles: { fillColor: [245, 158, 11] },
+        });
+      }
+
+      doc.save(`FINPILOT_ITR_Checklist_${chatState.itr_form || 'Filing'}.pdf`);
+      toast.success("Checklist PDF downloaded!");
+    } catch (e) {
+      toast.error("Failed to generate PDF.");
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[#070B13] text-white overflow-hidden fin-grid-pattern">
       {/* Sidebar for ITR Status */}
-      <div className="w-80 border-r border-border bg-card p-6 flex flex-col hidden md:flex">
-        <Link to="/itr-hub" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8">
-          <ArrowLeft size={16} /> Back to Hub
+      <div className="w-80 border-r border-white/[0.08] bg-[#080C14] p-5 flex flex-col hidden md:flex shrink-0 select-none">
+        <Link
+          to="/itr-hub"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white mb-6 p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+        >
+          <ArrowLeft size={15} /> Back to ITR Hub
         </Link>
         
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-bold text-foreground">Filing Status</h2>
+        <div className="flex justify-between items-center mb-5 pb-3 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2">
+            <Logo size="sm" />
+          </div>
           <button 
             onClick={handleNewSession}
-            className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors border border-border px-2 py-1 rounded hover:bg-muted"
+            className="text-[10px] font-mono font-bold text-slate-400 hover:text-emerald-400 transition-colors border border-white/10 px-2.5 py-1 rounded-lg hover:bg-white/5"
           >
             New Session
           </button>
         </div>
         
-        <div className="space-y-6">
+        <div className="space-y-5 flex-1 overflow-y-auto scrollbar-thin pr-1">
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Stage</p>
-            <div className={`inline-flex px-3 py-1 rounded-full text-xs font-medium capitalize
-              ${chatState.stage === 'ready' ? 'bg-success/15 text-success' : 'bg-primary/15 text-primary'}`}>
+            <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mb-1.5">Filing Stage</p>
+            <div className={`inline-flex px-3 py-1 rounded-full text-xs font-bold font-mono uppercase tracking-wider ${
+              chatState.stage === 'ready' 
+                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300' 
+                : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-300'
+            }`}>
               {chatState.stage}
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">ITR Form</p>
-            <p className="text-sm font-medium text-foreground">
-              {chatState.itr_form || "Analyzing..."}
-            </p>
+            <p className="text-[10px] font-mono font-bold text-slate-400 uppercase mb-1.5">Classified Form</p>
+            <div className="p-3 rounded-xl bg-[#0E1524] border border-white/[0.08]">
+              <span className="text-base font-black text-white font-display">
+                {chatState.itr_form || "Analyzing criteria..."}
+              </span>
+            </div>
           </div>
 
           {chatState.missing_info.length > 0 && chatState.stage !== 'ready' && (
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Missing Info</p>
-              <ul className="list-disc pl-4 space-y-1">
+              <p className="text-[10px] font-mono font-bold text-amber-400 uppercase mb-1.5">Missing Info</p>
+              <ul className="space-y-1.5 text-xs text-amber-300/80 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
                 {chatState.missing_info.map((info, idx) => (
-                  <li key={idx} className="text-sm text-amber-500/80">{info}</li>
+                  <li key={idx} className="flex items-start gap-1.5">
+                    <span className="text-amber-400 mt-0.5">•</span>
+                    <span>{info}</span>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -318,19 +353,19 @@ export default function ITRChatPage() {
           {chatState.checklist.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase">Document Checklist</p>
+                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">Document Checklist</p>
                 <button 
                   onClick={exportPDF}
-                  className="p-1 hover:bg-muted text-teal-500 rounded transition-colors"
+                  className="p-1 hover:bg-white/10 text-emerald-400 rounded-lg transition-colors"
                   title="Download PDF Checklist"
                 >
                   <Download size={14} />
                 </button>
               </div>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5 text-xs">
                 {chatState.checklist.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-sm text-foreground">
-                    <span className="text-success mt-0.5">✓</span>
+                  <li key={idx} className="flex items-start gap-2 bg-[#0E1524] p-2.5 rounded-xl border border-white/[0.06] text-slate-300">
+                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -341,51 +376,62 @@ export default function ITRChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-border bg-card/50 backdrop-blur flex items-center px-4 shrink-0 md:hidden">
-           <Link to="/itr-hub" className="mr-2 text-muted-foreground"><ArrowLeft size={18} /></Link>
-           <h2 className="text-sm font-medium">ITR Assistant</h2>
+      <div className="flex-1 flex flex-col min-w-0 bg-[#070B13] relative">
+        <header className="h-16 border-b border-white/[0.08] bg-[#0A0F1D]/80 backdrop-blur-xl flex items-center justify-between px-5 shrink-0 z-20">
+          <div className="flex items-center gap-3">
+            <Link to="/itr-hub" className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 md:hidden">
+              <ArrowLeft size={18} />
+            </Link>
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-emerald-400" />
+              <h2 className="text-xs font-bold text-white font-sans">FinPilot Guided ITR Filing Assistant</h2>
+            </div>
+          </div>
+          <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold uppercase">
+            FORM ENGINE
+          </span>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 scrollbar-thin">
+        {/* Message Stream */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 scrollbar-thin z-10">
           {messages.map((msg) => (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               key={msg.id}
               className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
             >
-              <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 text-sm
-                ${msg.sender === 'user' 
-                  ? 'bg-primary text-primary-foreground rounded-tr-sm' 
-                  : 'bg-muted text-foreground rounded-tl-sm border border-border prose prose-sm prose-invert prose-p:leading-relaxed prose-pre:bg-background/50 prose-pre:border prose-pre:border-border'
-                }`}
-              >
+              <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-xs sm:text-sm leading-relaxed shadow-lg ${
+                msg.sender === 'user' 
+                  ? 'bg-gradient-to-br from-emerald-600/30 via-teal-600/25 to-indigo-600/20 border border-emerald-500/30 text-white rounded-tr-sm' 
+                  : 'glass-card text-slate-200 rounded-tl-sm border border-white/[0.08]'
+              }`}>
                 {msg.sender === 'bot' ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
-                  </ReactMarkdown>
+                  <div className="prose prose-sm prose-invert max-w-none text-slate-200">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   msg.content
                 )}
               </div>
               
-              {/* MCQ Options Rendering */}
+              {/* Options Pills */}
               {msg.options && msg.options.length > 0 && msg.sender === 'bot' && (
-                <div className="flex flex-wrap gap-2 mt-3 max-w-[80%] md:max-w-[70%]">
+                <div className="flex flex-wrap gap-2 mt-2.5 max-w-[85%] md:max-w-[75%]">
                   {msg.options.map((opt, i) => (
                     <button
                       key={i}
                       onClick={() => {
-                         setInput(opt);
-                         // Small hack to ensure state is set before submitting
-                         setTimeout(() => {
-                           const formEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as React.FormEvent;
-                           handleSend(formEvent);
-                         }, 10);
+                        setInput(opt);
+                        setTimeout(() => {
+                          const formEvent = new Event('submit', { bubbles: true, cancelable: true }) as unknown as React.FormEvent;
+                          handleSend(formEvent);
+                        }, 10);
                       }}
                       disabled={isLoading}
-                      className="px-4 py-2 text-xs font-medium rounded-full bg-background border border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-[#0E1524] border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 hover:text-white transition-all disabled:opacity-50 shadow-sm"
                     >
                       {opt}
                     </button>
@@ -394,11 +440,12 @@ export default function ITRChatPage() {
               )}
             </motion.div>
           ))}
+
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm border border-border px-4 py-3 flex items-center gap-2">
-                <Loader2 size={16} className="animate-spin text-primary" />
-                <span className="text-sm">Thinking...</span>
+              <div className="glass-card text-slate-300 rounded-2xl rounded-tl-sm border border-white/[0.08] px-4 py-3 flex items-center gap-2 text-xs">
+                <Loader2 size={15} className="animate-spin text-emerald-400" />
+                <span className="font-mono text-[11px]">Evaluating tax schedules &amp; disclosures...</span>
               </div>
             </div>
           )}
@@ -409,15 +456,20 @@ export default function ITRChatPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="flex justify-center pt-4 pb-2"
             >
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 text-center max-w-sm w-full">
-                <h3 className="text-emerald-500 font-semibold mb-2">Filing Checklist Ready!</h3>
-                <p className="text-xs text-muted-foreground mb-4">You have successfully completed the assessment. Download your personalized checklist to proceed with your filing.</p>
+              <div className="glass-card border border-emerald-500/40 rounded-2xl p-6 text-center max-w-md w-full shadow-2xl">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-3">
+                  <CheckCircle2 size={20} />
+                </div>
+                <h3 className="text-white font-bold text-sm mb-1 font-display">Filing Checklist Ready</h3>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                  Your income profile has been classified for {chatState.itr_form || 'your return'}. Download your statutory checklist to finalize.
+                </p>
                 <button
                   onClick={exportPDF}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors w-full justify-center shadow-lg shadow-emerald-500/20"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white text-xs font-bold rounded-xl transition-all w-full justify-center shadow-lg shadow-emerald-500/25"
                 >
-                  <Download size={16} />
-                  Download PDF Checklist
+                  <Download size={15} />
+                  Download Complete PDF Checklist
                 </button>
               </div>
             </motion.div>
@@ -426,59 +478,60 @@ export default function ITRChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Input Bar */}
         <div 
           {...getRootProps()}
-          className={`p-4 bg-background border-t border-border transition-colors ${isDragActive ? 'bg-primary/5 border-primary/30' : ''}`}
+          className={`p-4 bg-[#0A0F1D]/90 border-t border-white/[0.08] backdrop-blur-xl transition-colors z-20 ${
+            isDragActive ? 'bg-emerald-500/10 border-emerald-500/40' : ''
+          }`}
         >
           <input {...getInputProps()} />
           
           {isDragActive && (
-            <div className="text-center text-primary text-sm mb-3 py-3 border-2 border-dashed border-primary/30 rounded-lg">
-              Drop your file here...
+            <div className="text-center text-emerald-400 text-xs mb-3 py-2 border-2 border-dashed border-emerald-500/40 rounded-xl bg-emerald-500/5 font-mono">
+              Drop supporting tax document here...
             </div>
           )}
 
           {file && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-muted/50 border border-border rounded-lg w-fit mx-auto md:mx-0">
-              {file.type.startsWith('image/') ? <Image size={14} className="text-primary" /> : <FileText size={14} className="text-primary" />}
-              <span className="text-sm text-muted-foreground truncate max-w-48">{file.name}</span>
-              <button onClick={() => setFile(null)} className="text-muted-foreground hover:text-destructive transition-colors">
-                <X size={14} />
+            <div className="flex items-center gap-2 mb-2.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl w-fit text-xs backdrop-blur-md">
+              {file.type.startsWith('image/') ? <Image size={13} className="text-emerald-400" /> : <FileText size={13} className="text-emerald-400" />}
+              <span className="text-slate-200 truncate max-w-xs">{file.name}</span>
+              <button onClick={() => setFile(null)} className="text-slate-400 hover:text-rose-400 p-0.5">
+                <X size={12} />
               </button>
             </div>
           )}
 
-          <div className="max-w-4xl mx-auto flex items-end gap-2">
+          <div className="max-w-4xl mx-auto flex items-center gap-2 p-1 pl-3 bg-[#0E1524] border border-white/10 rounded-2xl focus-within:border-emerald-500/50">
             <button
               onClick={open}
               disabled={isLoading}
-              className="p-3.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 shrink-0"
-              title="Attach file"
+              className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-white/5 transition-colors disabled:opacity-40 shrink-0"
+              title="Attach statement or Form 16"
             >
-              <Paperclip size={18} />
+              <Paperclip size={17} />
             </button>
-            <div className="flex-1 bg-input border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/50 transition-all flex items-center">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder={chatState.stage === 'ready' ? "Filing is ready, but you can ask more..." : "Type your answer or upload a doc..."}
-                className="w-full bg-transparent px-4 py-3.5 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground/50 disabled:opacity-50"
-                disabled={isLoading}
-              />
-            </div>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={chatState.stage === 'ready' ? "Filing is ready, ask any further questions..." : "Specify your income sources, deductions, or answer questions..."}
+              className="w-full bg-transparent border-0 px-2 py-2 text-xs sm:text-sm text-white focus:outline-none placeholder:text-slate-500 disabled:opacity-50 font-sans"
+              disabled={isLoading}
+            />
             <button
               onClick={() => handleSend()}
               disabled={(!input.trim() && !file) || isLoading}
-              className="w-12 h-12 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-9 h-9 shrink-0 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white rounded-xl flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-md shadow-emerald-500/20"
             >
-              <Send size={18} />
+              <Send size={15} />
             </button>
           </div>
         </div>
