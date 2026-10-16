@@ -59,6 +59,18 @@ app.add_middleware(
 UPLOAD_FOLDER = "temp"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "CA Agent 2.0 API", "docs": "/docs"}
+
+@app.get("/favicon.ico")
+def favicon():
+    return {}
+
+@app.get("/robots.txt")
+def robots():
+    return "User-agent: *\nDisallow: /"
+
 MAX_DOCUMENT_CONTEXT_CHARS = 3200
 MAX_COMBINED_QUERY_CHARS   = 4000
 MAX_FINAL_QUERY_CHARS      = 5500
@@ -409,7 +421,7 @@ def bank_gemini_dict_to_plaintext(parsed: dict[str, Any]) -> str:
 
 
 @app.post("/ask")
-async def ask(body: AskRequest):
+def ask(body: AskRequest):
     req = body
     user_text = req.question.strip()
     if not user_text:
@@ -542,7 +554,7 @@ class ITRChatRequest(BaseModel):
     context: Optional[str] = None
 
 @app.post("/api/itr/chat")
-async def itr_chat(req: ITRChatRequest):
+def itr_chat(req: ITRChatRequest):
     try:
         user_query = req.query or req.message or ""
         extracted = req.extracted_data if req.extracted_data else req.doc_data
@@ -568,7 +580,7 @@ class ITRAnalyzeRequest(BaseModel):
     extracted_data: dict = Field(default_factory=dict)
 
 @app.post("/api/itr/analyze")
-async def itr_analyze(req: ITRAnalyzeRequest):
+def itr_analyze(req: ITRAnalyzeRequest):
     try:
         response = quick_analyze_documents(req.extracted_data)
         return response
