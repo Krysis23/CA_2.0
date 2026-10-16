@@ -1,0 +1,97 @@
+================================================================================
+                    CA AGENT 2.0 — TERMINAL COMMANDS CHEATSHEET
+================================================================================
+
+--------------------------------------------------------------------------------
+MODE 1: HYBRID CLOUD RUN (Vercel Frontend + Your Local Backend & Ollama)
+--------------------------------------------------------------------------------
+Use this mode when you want your live Vercel web app to work.
+Open 2 PowerShell terminals in this project directory:
+
+TERMINAL 1 (Start FastAPI Backend):
+    npm run api
+    
+    # Or run Python directly:
+    python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000
+
+
+TERMINAL 2 (Start Permanent Public Tunnel):
+    # Option A: Permanent fixed URL (URL NEVER changes across restarts):
+    npx -y localtunnel --port 8000 --subdomain finpilot-backend-parth
+    # Fixed URL: https://finpilot-backend-parth.loca.lt
+
+    # Option B: Cloudflare Quick Tunnel:
+    .\cloudflared.exe tunnel --url http://localhost:8000
+
+
+OLLAMA (Embedding Engine):
+    Ollama runs automatically in the background on Windows.
+    If you ever need to manually start it:
+    ollama serve
+    
+    # Check if bge-m3 model is present:
+    ollama list
+
+
+--------------------------------------------------------------------------------
+MODE 2: 100% LOCAL DEVELOPMENT (Everything on localhost)
+--------------------------------------------------------------------------------
+Use this mode to test and develop on your machine without internet tunnel.
+Open 3 PowerShell terminals in this project directory:
+
+TERMINAL 1 (Ollama Service):
+    ollama serve
+
+TERMINAL 2 (FastAPI Backend Server):
+    npm run api
+    # (Runs at: http://127.0.0.1:8000)
+    # (Swagger API Docs: http://127.0.0.1:8000/docs)
+
+TERMINAL 3 (React Vite Frontend):
+    npm run dev
+    # (Opens UI at: http://localhost:8080/)
+
+
+--------------------------------------------------------------------------------
+MODE 3: DOCKER COMPOSE (Single-Command Local Multi-Container Stack)
+--------------------------------------------------------------------------------
+    # Build and start Ollama, Backend, and Frontend all together:
+    docker compose up --build
+
+    # Stop all containers:
+    docker compose down
+
+
+--------------------------------------------------------------------------------
+MAINTENANCE & UTILITY COMMANDS
+--------------------------------------------------------------------------------
+
+1. Clean Stale Bank Statement Uploads (temp/ directory):
+    # Preview files to be deleted without actually deleting:
+    python cleanup_temp.py --dry-run --verbose
+
+    # Delete statement uploads older than 1 day (24 hours):
+    python cleanup_temp.py --days 1
+
+    # Delete statement uploads older than 6 hours:
+    python cleanup_temp.py --hours 6
+
+2. Build Frontend for Production:
+    npm run build
+
+3. Run Frontend Automated Tests:
+    npm test
+
+4. Push Changes to GitHub (Triggers automatic redeploy on Vercel & Railway):
+    git add .
+    git commit -m "your commit message"
+    git push origin main
+
+
+--------------------------------------------------------------------------------
+HEALTH CHECK URLS
+--------------------------------------------------------------------------------
+Frontend UI:          http://localhost:8080/
+Backend Docs:         http://127.0.0.1:8000/docs
+Ollama Health:        http://127.0.0.1:11434
+================================================================================

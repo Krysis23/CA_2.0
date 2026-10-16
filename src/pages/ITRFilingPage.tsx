@@ -35,6 +35,7 @@ export default function ITRFilingPage() {
       const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
       const uploadRes = await fetch(`${apiBase}/upload`, {
         method: 'POST',
+        headers: { 'bypass-tunnel-reminder': 'true' },
         body: formData,
       });
 
@@ -48,7 +49,10 @@ export default function ITRFilingPage() {
       // 2. Send extracted data for ITR Quick Analysis
       const analyzeRes = await fetch(`${apiBase}/api/itr/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true'
+        },
         body: JSON.stringify({ extracted_data: extractedData }),
       });
 

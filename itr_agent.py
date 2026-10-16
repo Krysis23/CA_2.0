@@ -29,13 +29,21 @@ def _build_rag_context(query: str, extracted_data: dict) -> str:
         print(f"[itr_agent] RAG Search failed: {e}")
         return "No additional context available."
 
-def format_history(history: List[Dict[str, str]]) -> str:
+def format_history(history: List[Dict[str, Any]]) -> str:
     if not history:
         return "No previous conversation."
     lines = []
     for turn in history:
-        lines.append(f"User: {turn.get('user', '')}")
-        lines.append(f"Assistant: {turn.get('assistant', '')}")
+        if not isinstance(turn, dict):
+            continue
+        if "role" in turn and "content" in turn:
+            role_label = "User" if turn.get("role") == "user" else "Assistant"
+            lines.append(f"{role_label}: {turn.get('content', '')}")
+        else:
+            if "user" in turn:
+                lines.append(f"User: {turn.get('user', '')}")
+            if "assistant" in turn:
+                lines.append(f"Assistant: {turn.get('assistant', '')}")
     return "\n".join(lines)
 
 def analyze_itr_requirements(query: str, extracted_data: dict, history: List[Dict[str, str]], current_stage: str) -> Dict[str, Any]:

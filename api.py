@@ -533,26 +533,39 @@ async def upload(file: UploadFile = File(...), context: Optional[str] = Form(Non
             pass
 
 class ITRChatRequest(BaseModel):
-    query: str
+    query: Optional[str] = None
+    message: Optional[str] = None
     history: list[dict] = Field(default_factory=list)
     extracted_data: dict = Field(default_factory=dict)
+    doc_data: dict = Field(default_factory=dict)
     current_stage: str = "collecting"
+    context: Optional[str] = None
 
 @app.post("/api/itr/chat")
 async def itr_chat(req: ITRChatRequest):
     try:
+        user_query = req.query or req.message or ""
+        extracted = req.extracted_data if req.extracted_data else req.doc_data
+        stage = req.context or req.current_stage or "collecting"
+
         response = analyze_itr_requirements(
-            query=req.query,
-            extracted_data=req.extracted_data,
+            query=user_query,
+            extracted_data=extracted,
             history=req.history,
-            current_stage=req.current_stage
+            current_stage=stage
         )
+        if isinstance(response, dict):
+            # Ensure compatibility with both frontend naming expectations
+            response["reply"] = response.get("bot_reply", "")
+            response["options"] = response.get("mcq_options", [])
+            response.setdefault("bot_reply", response.get("reply", ""))
+            response.setdefault("mcq_options", response.get("options", []))
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 class ITRAnalyzeRequest(BaseModel):
-    extracted_data: dict
+    extracted_data: dict = Field(default_factory=dict)
 
 @app.post("/api/itr/analyze")
 async def itr_analyze(req: ITRAnalyzeRequest):

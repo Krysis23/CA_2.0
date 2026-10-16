@@ -167,6 +167,7 @@ export default function ITRChatPage() {
 
         const uploadRes = await fetch(`${apiBase}/upload`, {
           method: 'POST',
+          headers: { 'bypass-tunnel-reminder': 'true' },
           body: formData,
         });
 
@@ -190,7 +191,10 @@ export default function ITRChatPage() {
 
       const res = await fetch(`${apiBase}/api/itr/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true'
+        },
         body: JSON.stringify({
           message: userText,
           history: historyPayload,
