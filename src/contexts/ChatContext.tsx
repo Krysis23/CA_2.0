@@ -332,7 +332,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         const res = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
-          headers: { 'bypass-tunnel-reminder': 'true' },
           body: formData,
         });
 
@@ -416,7 +415,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'bypass-tunnel-reminder': 'true'
           },
           body: JSON.stringify({
             question: content,

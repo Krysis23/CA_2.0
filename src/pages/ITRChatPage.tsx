@@ -157,17 +157,14 @@ export default function ITRChatPage() {
     try {
       let currentDocData = accumulatedData;
 
-      const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
-
       if (attachedFile) {
         toast.info("Extracting financial data from document...");
         const formData = new FormData();
         formData.append('file', attachedFile);
         formData.append('context', 'itr');
 
-        const uploadRes = await fetch(`${apiBase}/upload`, {
+        const uploadRes = await fetch('http://localhost:8000/upload', {
           method: 'POST',
-          headers: { 'bypass-tunnel-reminder': 'true' },
           body: formData,
         });
 
@@ -189,12 +186,9 @@ export default function ITRChatPage() {
           content: m.content
         }));
 
-      const res = await fetch(`${apiBase}/api/itr/chat`, {
+      const res = await fetch('http://localhost:8000/api/itr/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'bypass-tunnel-reminder': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userText,
           history: historyPayload,

@@ -64,8 +64,6 @@ package-lock.json
 
 api_keys.txt
 Income_Tax_Act_2025_as_amended_by_FA_Act_2026.pdf
-cloudflared.exe
-ngrok.exe
 temp/*
 !temp/.gitkeep
 

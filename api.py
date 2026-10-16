@@ -33,26 +33,11 @@ safe = lambda x: float(x) if isinstance(x, (int, float)) else 0
 
 app = FastAPI(title="CA AI Assistant API")
 
-# Production CORS Lockdown
-cors_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
-if cors_env:
-    ALLOWED_ORIGINS = [origin.strip() for origin in cors_env.split(",") if origin.strip()]
-else:
-    ALLOWED_ORIGINS = [
-        "https://ca.yourdomain.com",
-        "https://ca-agent-frontend.vercel.app",
-        "http://localhost:8080",  # Staging / Vite default
-        "http://localhost:5173",
-        "http://127.0.0.1:8080",
-        "http://127.0.0.1:5173",
-    ]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
