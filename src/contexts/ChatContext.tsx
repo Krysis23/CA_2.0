@@ -63,6 +63,7 @@ interface ChatContextType {
   deleteConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
   setActiveConversation: (id: string) => void;
+  setActiveConversationId: (id: string) => void;
   sendMessage: (content: string, file?: File) => Promise<void>;
   clearChat: () => void;
   isProcessing: boolean;
@@ -331,10 +332,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
         const res = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
-          headers: {
-            'bypass-tunnel-reminder': 'true',
-            'ngrok-skip-browser-warning': 'true',
-          },
+          headers: { 'bypass-tunnel-reminder': 'true' },
           body: formData,
         });
 
@@ -418,8 +416,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'bypass-tunnel-reminder': 'true',
-            'ngrok-skip-browser-warning': 'true',
+            'bypass-tunnel-reminder': 'true'
           },
           body: JSON.stringify({
             question: content,
@@ -499,6 +496,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         deleteConversation,
         renameConversation,
         setActiveConversation: setActiveConversationId,
+        setActiveConversationId,
         sendMessage,
         clearChat,
         isProcessing,

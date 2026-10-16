@@ -167,10 +167,7 @@ export default function ITRChatPage() {
 
         const uploadRes = await fetch(`${apiBase}/upload`, {
           method: 'POST',
-          headers: {
-            'bypass-tunnel-reminder': 'true',
-            'ngrok-skip-browser-warning': 'true',
-          },
+          headers: { 'bypass-tunnel-reminder': 'true' },
           body: formData,
         });
 
@@ -196,8 +193,7 @@ export default function ITRChatPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'bypass-tunnel-reminder': 'true',
-          'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true'
         },
         body: JSON.stringify({
           message: userText,

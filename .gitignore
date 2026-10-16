@@ -66,7 +66,6 @@ api_keys.txt
 Income_Tax_Act_2025_as_amended_by_FA_Act_2026.pdf
 cloudflared.exe
 ngrok.exe
-ngrok.zip
 temp/*
 !temp/.gitkeep
 

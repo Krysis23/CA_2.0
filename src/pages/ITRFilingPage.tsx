@@ -35,10 +35,7 @@ export default function ITRFilingPage() {
       const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
       const uploadRes = await fetch(`${apiBase}/upload`, {
         method: 'POST',
-        headers: {
-          'bypass-tunnel-reminder': 'true',
-          'ngrok-skip-browser-warning': 'true',
-        },
+        headers: { 'bypass-tunnel-reminder': 'true' },
         body: formData,
       });
 
@@ -54,8 +51,7 @@ export default function ITRFilingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'bypass-tunnel-reminder': 'true',
-          'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': 'true'
         },
         body: JSON.stringify({ extracted_data: extractedData }),
       });

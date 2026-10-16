@@ -16,9 +16,9 @@ TERMINAL 1 (Start FastAPI Backend):
 
 
 TERMINAL 2 (Start Permanent Public Tunnel):
-    # Option A: Ngrok Permanent Static Domain (Guaranteed NEVER to change):
-    ngrok http --domain=prism-request-shown.ngrok-free.dev 8000
-    # Permanent URL: https://prism-request-shown.ngrok-free.dev
+    # Option A: Permanent fixed URL (URL NEVER changes across restarts):
+    npx -y localtunnel --port 8000 --subdomain finpilot-backend-parth
+    # Fixed URL: https://finpilot-backend-parth.loca.lt
 
     # Option B: Cloudflare Quick Tunnel:
     .\cloudflared.exe tunnel --url http://localhost:8000
